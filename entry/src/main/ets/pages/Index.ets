@@ -56,6 +56,8 @@ struct Index {
   @State scrollVal: number = 0;
   @StorageLink('deviceWidth') deviceWidth: number = 0;
   @StorageLink('deviceHeight') deviceHeight: number = 0;
+  // 循环播放开关
+  @State isLoopPlay: boolean = true;
 
   aboutToAppear(): void {
     // 修复：取数组的第一个元素，而不是整个数组
@@ -290,7 +292,7 @@ struct Index {
         max: this.durationTime,
         step: 1
       })
-        // [StartExclude seek_play_video]
+      // [StartExclude seek_play_video]
         .width('50%') // 宽度调整为50%以留出空间
         .trackColor($r('app.color.slider_color'))
         // [EndExclude seek_play_video]
@@ -301,7 +303,7 @@ struct Index {
       Text(FormatTime.getTimesBySecond(this.durationTime))
         .fontSize(12)
         .fontColor(Color.White)
-      
+
       // +++ 添加倍速按钮 +++
       Column() {
         Text(this.playbackSpeed)
@@ -358,6 +360,8 @@ struct Index {
       Text(FormatTime.getTimesBySecond(this.durationTime))
         .fontSize(12)
         .fontColor(Color.White)
+      
+      // 倍速按钮
       Column() {
         Text(this.playbackSpeed)
           .fontSize(12)
@@ -373,6 +377,16 @@ struct Index {
       })
       .bindMenu(this.SpeedMenu)
 
+      // +++ 循环播放按钮（新增）+++
+      Button(this.isLoopPlay ? '循环开' : '循环关')
+        .fontSize(12)
+        .height(24)
+        .backgroundColor(this.isLoopPlay ? Color.Green : Color.Gray)
+        .onClick(() => {
+          this.isLoopPlay = !this.isLoopPlay;
+        })
+
+      // 静音按钮
       Image(this.isMute || this.volume === 0.0 ? $r('app.media.mute') : $r('app.media.with_audio'))
         .width('24vp')
         .height('24vp')
@@ -384,6 +398,8 @@ struct Index {
             this.volume = 0.5;
           }
         })
+      
+      // 退出全屏按钮
       Image($r('app.media.reduce_fullscreen'))
         .width('24vp')
         .height('24vp')
@@ -441,7 +457,7 @@ struct Index {
               .muted(this.isMute)
               .autoPlay(this.isAutoPlay)
               // [EndExclude loop_play_video]
-              .loop(true)
+              .loop(this.isLoopPlay)  // 修改：使用状态变量控制循环播放
               // [End loop_play_video]
               // [EndExclude controls]
               .controls(false)
