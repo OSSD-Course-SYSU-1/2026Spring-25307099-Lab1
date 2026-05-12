@@ -33,6 +33,7 @@ const TAG = '[IndexPage]';
 @Component
 struct Index {
   private screenHeight: number = 0; // Screen height.
+  private screenWidth: number = 0; // Screen width.
   private windowUtil: WindowUtil = WindowUtil.getInstance();
   private videoController: VideoController = new VideoController();
   private avSessionController: AVSessionController = AVSessionController.getInstance();
@@ -50,6 +51,8 @@ struct Index {
   // [End playback_speed]
   @State isMute: boolean = false; // Play with mute or not.
   @State visible: boolean = false; // Whether to display the brightness adjustment icon and slider.
+  @State showBrightness: boolean = false; // 是否显示亮度调节提示
+  @State currentBrightness: number = 50; // 亮度值 0-100
   @State volume: number = 5;
   @State curSource: VideoInfo | undefined = undefined;
   @State isPlaying: boolean = false;
@@ -73,6 +76,7 @@ struct Index {
           return;
         }
         this.screenHeight = data.getWindowProperties().windowRect.height;
+        this.screenWidth = data.getWindowProperties().windowRect.width;
       })
     } catch (error) {
       let err = error as BusinessError;
@@ -188,6 +192,27 @@ struct Index {
     this.videoController.start();
   }
 
+  // 跳转到下一个视频
+  playNextVideo() {
+    if (!VideoData.length) {
+      return;
+    }
+    this.currentVideoIndex = (this.currentVideoIndex + 1) % VideoData.length;
+    this.curSource = VideoData[this.currentVideoIndex];
+    if (!this.curSource) {
+      return;
+    }
+    this.videoSrc = this.curSource.videoSrc;
+    this.videoController.stop();
+    this.currentTime = 0;
+    this.isPlaying = false;
+    this.avSessionController.setAVMetadata(this.curSource, this.durationTime * 1000);
+    this.currentVideoStatus = VideoStatus.PLAY_STARTED;
+    this.updateIsPlay();
+    this.videoController.start();
+    this.isAutoPlay = true;
+  }
+
   // AVSession switches to the previous/next video.
   changePlayVideo(isPrevious: boolean) {
     if (!VideoData.length) {
@@ -293,7 +318,7 @@ struct Index {
         step: 1
       })
       // [StartExclude seek_play_video]
-        .width('50%') // 宽度调整为50%以留出空间
+        .width('40%')
         .trackColor($r('app.color.slider_color'))
         // [EndExclude seek_play_video]
         .onChange((value) => {
@@ -304,7 +329,7 @@ struct Index {
         .fontSize(12)
         .fontColor(Color.White)
 
-      // +++ 添加倍速按钮 +++
+      // 1. 倍速按钮
       Column() {
         Text(this.playbackSpeed)
           .fontSize(12)
@@ -320,6 +345,7 @@ struct Index {
       })
       .bindMenu(this.SpeedMenu)
 
+      // 2. 全屏按钮（倍速右边）
       Image($r('app.media.fullscreen'))
         .width('24vp')
         .height('24vp')
@@ -327,11 +353,18 @@ struct Index {
           this.isFullScreen = !this.isFullScreen;
           if (this.isFullScreen) {
             this.windowUtil.setLandscapeMultiWindow(true);
-            // [Start to_full_screen]
             this.windowUtil.disableWindowSystemBar();
             this.windowUtil.setMainWindowOrientation(window.Orientation.USER_ROTATION_LANDSCAPE);
-            // [End to_full_screen]
           }
+        })
+
+      // 3. 下一集按钮（全屏右边）
+      Button('下一集')
+        .fontSize(12)
+        .height(24)
+        .backgroundColor(Color.Blue)
+        .onClick(() => {
+          this.playNextVideo();
         })
     }
     .width('100%')
@@ -352,7 +385,7 @@ struct Index {
         max: this.durationTime,
         step: 1
       })
-        .width('65%')
+        .width('45%')
         .trackColor($r('app.color.slider_color'))
         .onChange((value) => {
           this.videoController.setCurrentTime(value, SeekMode.Accurate);
@@ -360,7 +393,7 @@ struct Index {
       Text(FormatTime.getTimesBySecond(this.durationTime))
         .fontSize(12)
         .fontColor(Color.White)
-      
+
       // 倍速按钮
       Column() {
         Text(this.playbackSpeed)
@@ -377,9 +410,9 @@ struct Index {
       })
       .bindMenu(this.SpeedMenu)
 
-      // +++ 循环播放按钮（新增）+++
-      Button(this.isLoopPlay ? '循环开' : '循环关')
-        .fontSize(12)
+      // 循环播放按钮
+      Button(this.isLoopPlay ? '循环' : '单次')
+        .fontSize(11)
         .height(24)
         .backgroundColor(this.isLoopPlay ? Color.Green : Color.Gray)
         .onClick(() => {
@@ -388,8 +421,8 @@ struct Index {
 
       // 静音按钮
       Image(this.isMute || this.volume === 0.0 ? $r('app.media.mute') : $r('app.media.with_audio'))
-        .width('24vp')
-        .height('24vp')
+        .width('20vp')
+        .height('20vp')
         .onClick(() => {
           this.isMute = !this.isMute;
           if (this.isMute) {
@@ -398,19 +431,26 @@ struct Index {
             this.volume = 0.5;
           }
         })
-      
+
+      // 下一集按钮
+      Button('下一集')
+        .fontSize(11)
+        .height(24)
+        .backgroundColor(Color.Blue)
+        .onClick(() => {
+          this.playNextVideo();
+        })
+
       // 退出全屏按钮
       Image($r('app.media.reduce_fullscreen'))
-        .width('24vp')
-        .height('24vp')
+        .width('20vp')
+        .height('20vp')
         .onClick(() => {
           this.isFullScreen = !this.isFullScreen;
           if (!this.isFullScreen) {
             this.windowUtil.setLandscapeMultiWindow(false);
-            // [Start disabled_full_screen]
             this.windowUtil.enableWindowSystemBar();
             this.windowUtil.setMainWindowOrientation(window.Orientation.USER_ROTATION_PORTRAIT);
-            // [Start disabled_full_screen]
           }
         })
     }
@@ -422,46 +462,30 @@ struct Index {
 
   // Range limit for input values.
   private getValidValue(inputVal: number, minVal: number, maxVal: number): number {
-    // When the input value exceeds the maximum value, take the maximum value.
     inputVal = Math.min(inputVal, maxVal);
-    // Lower limit limit: When the input value is less than the minimum value, take the minimum value.
     inputVal = Math.max(inputVal, minVal);
     return inputVal;
   }
 
   build() {
     Column() {
-      // [Start scroll_onWillScroll]
       Scroll() {
-        // [StartExclude scroll_onWillScroll]
         Column({ space: CommonConstants.COMPONENT_SPACE }) {
           Stack() {
-            // [Start previewUri_pic2]
-            // [Start controls]
-            // [Start currentProgressRate]
-            // [Start loop_play_video]
             Video({
               src: this.videoSrc,
               controller: this.videoController,
-              currentProgressRate: this.curRate, // Set playback speed.
+              currentProgressRate: this.curRate,
               posterOptions: {
                 showFirstFrame: true,
               }
             })
-            // [End currentProgressRate]
-            // [End previewUri_pic2]
-            // [StartExclude controls]
-            // [StartExclude loop_play_video]
               .width(this.isFullScreen ? '80%' : '100%')
               .height(this.isFullScreen ? '100%' : 220)
               .muted(this.isMute)
               .autoPlay(this.isAutoPlay)
-              // [EndExclude loop_play_video]
-              .loop(this.isLoopPlay)  // 修改：使用状态变量控制循环播放
-              // [End loop_play_video]
-              // [EndExclude controls]
+              .loop(this.isLoopPlay)
               .controls(false)
-              // [End controls]
               .onPrepared((event) => {
                 this.currentVideoStatus = VideoStatus.PLAY_PREPARED;
                 if (event) {
@@ -498,37 +522,49 @@ struct Index {
                   visible: this.visible,
                   volume: this.volume,
                 })
+                if (this.showBrightness) {
+                  Column() {
+                    Text(`亮度: ${Math.round(this.currentBrightness)}%`)
+                      .fontSize(16)
+                      .fontColor(Color.White)
+                      .backgroundColor('rgba(0,0,0,0.6)')
+                      .padding(10)
+                      .borderRadius(8)
+                  }
+                  .position({ x: '50%', y: '50%' })
+                  .translate({ x: '-50%', y: '-50%' })
+                }
                 this.FullScreenVideoControllerBuilder();
               }
-              // Bind gesture event.
               .gesture(
                 GestureGroup(
                   GestureMode.Exclusive,
-                  // [Start set_volume]
-                  // Bind the swipe gesture event.
                   PanGesture({ direction: PanDirection.Vertical })
-                    .onActionStart(() => {
-                    })
                     .onActionUpdate((event: GestureEvent) => {
-                      this.visible = false;
-                      // Current Volume value = Volume value - Vertical offset (physical pixels) of the gesture / Screen height.
-                      let curVolume = this.volume - this.getUIContext().vp2px(event.offsetY) / this.screenHeight;
-                      // Limit the volume range between 0 and 15.
-                      curVolume = this.getValidValue(curVolume, CommonConstants.MIN_VOLUME, CommonConstants.MAX_VOLUME);
-                      if(curVolume === 0) {
-                        this.isMute = true;
-                      } else {
-                        this.isMute = false;
+                      let currentX: number = 0;
+                      if (event.fingerList && event.fingerList.length > 0) {
+                        currentX = event.fingerList[0].localX;
                       }
-                      this.volume = curVolume;
+                      const isRightSide = currentX > (this.screenWidth / 2);
+                      
+                      if (isRightSide && this.screenWidth > 0) {
+                        this.showBrightness = true;
+                        let deltaBrightness = -event.offsetY / this.screenHeight * 100;
+                        let newBrightness = this.currentBrightness + deltaBrightness;
+                        newBrightness = Math.max(0, Math.min(100, newBrightness));
+                        this.currentBrightness = newBrightness;
+                      } else {
+                        this.visible = true;
+                        let curVolume = this.volume - event.offsetY / this.screenHeight * 10;
+                        curVolume = Math.max(0, Math.min(CommonConstants.MAX_VOLUME, curVolume));
+                        this.volume = curVolume;
+                        this.isMute = (curVolume === 0);
+                      }
                     })
                     .onActionEnd(() => {
-                      setTimeout(() => {
-                        this.visible = false;
-                      }, 1500)
+                      this.visible = false;
+                      this.showBrightness = false;
                     }),
-                  // [End set_volume]
-                  // [Start LongPressGesture]
                   LongPressGesture({ repeat: true })
                     .onAction(() => {
                       this.playbackSpeed = '2.0X';
@@ -538,7 +574,6 @@ struct Index {
                       this.playbackSpeed = '1.0X';
                       this.curRate = PlaybackSpeed.Speed_Forward_1_00_X;
                     })
-                  // [End LongPressGesture]
                 )
               )
             } else {
@@ -561,7 +596,6 @@ struct Index {
               this.updateIsPlay();
             }
           })
-          // +++ 添加长按手势 +++
           .gesture(
             LongPressGesture({ repeat: true })
               .onAction(() => {
@@ -574,7 +608,6 @@ struct Index {
               })
           )
 
-          // Video list area.
           if (!this.isFullScreen) {
             VideoListPage({
               currentVideoIndex: this.currentVideoIndex,
@@ -584,23 +617,15 @@ struct Index {
             })
           }
         }
-
-        // [EndExclude scroll_onWillScroll]
       }
-      // [StartExclude scroll_onWillScroll]
       .width('100%')
       .height('100%')
       .scrollBar(BarState.Off)
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-      // [EndExclude scroll_onWillScroll]
       .onWillScroll((_xOffset: number, yOffset: number) => {
         this.scrollVal += yOffset;
       })
 
-      // [End scroll_onWillScroll]
-
-      // [Start small_window_video]
-      // Play in a small window.
       if (this.scrollVal >= 240 && this.isPlaying && !this.isFullScreen) {
         SmallWidnowVideo({
           videoSrc: this.videoSrc,
@@ -611,7 +636,6 @@ struct Index {
           videoController: this.videoController,
         })
       }
-      // [End small_window_video]
     }
     .width('100%')
     .height('100%')
