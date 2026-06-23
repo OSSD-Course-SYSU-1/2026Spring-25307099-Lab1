@@ -207,3 +207,32 @@ interface DanmuItem {
   yPosition: number; // Y轴位置（不同行）
 }
 
+7.大小屏适配功能
+新增多设备自适应布局，支持手机、折叠屏、平板等多种屏幕尺寸的自动适配。
+
+```typescript
+// 断点常量
+const BREAKPOINT_SM = 520;   // 手机（小屏）
+const BREAKPOINT_MD = 840;   // 折叠屏（中屏）
+const BREAKPOINT_LG = 1200;  // 平板/PC（大屏）
+
+// 当前断点状态
+@State currentBreakpoint: string = 'sm';  // sm / md / lg
+@State windowWidth: number = 0;           // 当前窗口宽度
+
+8. 跨端迁移功能（自由流转）
+
+新增应用跨端迁移能力，支持视频播放状态在不同设备间无缝流转，用户可在手机、平板等设备间自由切换，观看进度不中断。
+
+```json
+{
+  "module": {
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "continuable": true,  // 开启应用迁移能力
+        // ... 其他配置
+      }
+    ]
+  }
+}
